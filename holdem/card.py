@@ -39,6 +39,17 @@ class Rank(enum.Enum):
     def __gt__(self, other):
         return self.value > other.value
 
+    def __repr__(self):
+        _special = {
+            1: 'Ace',
+            11: 'Jack',
+            12: 'Queen',
+            13: 'King'
+        }
+        if self.value < 11:
+            return self.name
+        return self._special[self.value]
+
     @staticmethod
     def is_straight(ranks):
         # 顺子判定
@@ -64,7 +75,7 @@ class Card:
         return self.rank == other.rank
 
     def __repr__(self):
-        return f'<{self.rank.name} {self.suit.name}>'
+        return f'<{self.suit.name}|{self.rank.name}>'
 
     suit_map = {
         'd': 1,
