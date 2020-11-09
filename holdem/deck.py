@@ -41,10 +41,7 @@ class Deck:
         :param remove: cards to be pop out
         :return: new Deck object with cards removed
         """
-        cards = []
-        for c in self._pool:
-            if not any([c.identical(r) for r in remove]):
-                cards.append(c)
+        cards = [c for c in self._pool if c not in remove]
         return Deck(cards)
 
     def __repr__(self):

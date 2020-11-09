@@ -1,6 +1,7 @@
 import enum
 import operator
 import re
+from typing import List
 
 
 class Suit(enum.Enum):
@@ -78,18 +79,8 @@ class TexasCard:
         self.suit = suit
         self.rank = rank
 
-    def __gt__(self, other):
-        return self.rank > other.rank
-
     def __eq__(self, other):
         # Texas hol;dem rule: The card's numerical rank is of sole importance; suit values are irrelevant
-        return self.rank == other.rank
-
-    def identical(self, other):
-        """
-        Since the __eq__ operator is overridden to provide rank-only check, this method does a strict card equality
-        check, i.e. a == b only if a.rank == b.rank and a.suit == b.suit
-        """
         return self.rank == other.rank and self.suit == other.suit
 
     def __repr__(self):
@@ -110,3 +101,16 @@ class TexasCard:
         """
         suit_str, rank_str = re.match(r'([a-z])(\d+)', card_str).groups()
         return TexasCard(Suit(cls._suit_map[suit_str]), Rank(int(rank_str)))
+
+
+class Cards:
+    @staticmethod
+    def from_str(string, delim=',') -> List[TexasCard]:
+        """
+
+        :param delim:
+        :param string: h2 h4 h5 h6 78, could be unsorted
+        :return: a list of cards, sorted descending
+        """
+        return sorted([TexasCard.from_str(card_s) for card_s in string.split(delim)], key=operator.attrgetter('rank'),
+                      reverse=True)

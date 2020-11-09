@@ -2,20 +2,15 @@ import itertools
 # import sys
 import operator
 import time
-import random
-from typing import Iterable, Tuple
-
 # from logbook import Logger, StreamHandler
 from collections import defaultdict, OrderedDict, namedtuple
+from dataclasses import dataclass, field
+from typing import List
 
+import numpy as np
 from tqdm import tqdm
 
-from .card import TexasCard
 from .showdown import *
-from .hand import get_rank_distribution
-
-# logger = Logger('calculator')
-# StreamHandler(sys.stdout).push_application()
 
 HAND_SEARCH_ORDER = [
     RoyalFlush,
@@ -31,11 +26,11 @@ HAND_SEARCH_ORDER = [
 ]
 
 
-def find_best_for_hand(hand: Hand):
-    for showdown_type in HAND_SEARCH_ORDER:
-        if showdown_type.check(hand):
-            showdown = showdown_type(hand)
-            return showdown
+@dataclass
+class BestRankItem:
+    rank: Rank = None
+    count: int = 0
+    cards: List[TexasCard] = field(default_factory=list)
 
 
 # # Brutal force, check every 5-element subset of 2 holes + 5 community cards
@@ -58,6 +53,21 @@ def find_best_for_hand(hand: Hand):
 #     return current_best
 #
 
+def get_rank_distribution(cards: Iterable[TexasCard]):
+    """
+
+    :param cards: descending sorted
+    :return: OrdedDict[Rank, (count, cards)], keys sorted descending
+    """
+    d = defaultdict(BestRankItem)
+    for card in cards:
+        obj = d[card.rank]
+        obj.rank = card.rank
+        obj.count += 1
+        obj.cards.append(card)
+    return d
+
+
 # suit with the most number of cards, if
 def get_max_suit(community_cards: List[TexasCard]):
     ms = defaultdict(lambda: 0)
@@ -66,37 +76,32 @@ def get_max_suit(community_cards: List[TexasCard]):
     return max(ms.items(), key=operator.itemgetter(1))
 
 
-BestRank = namedtuple('BestRank', ['rank', 'count'])
-
-
-def sec_best_and_best_rank(rank_distribution):
-    return [BestRank(k, v) for k, v in sorted(rank_distribution.items(), key=(lambda x: (x[1], x[0])),
-                                              )[-2:]]
-
-
-# return all card with the same suit = flush_suit, sorted asc, >= 5
-# cards assume sorted desc
 def find_suit(cards: List[TexasCard], flush_suit):
-    assert len(cards) == 7
+    """
+
+    :param cards: sorted desc
+    :param flush_suit: Suit
+    :return: all card with the same suit = flush_suit, sorted desc, at least five
+    """
     same_suit = []
     for card in cards:
         if card.suit == flush_suit:
-            same_suit.insert(0, card)
+            same_suit.append(card)
     return same_suit
 
 
 def detect_straight(cards: List[TexasCard]):
     """
-    cards assume sorted desc
-    If there exists a five-card straight in cards, return the (five) straight cards (sorted asc);
-    Else, return None
+    :param cards: assume sorted desc
+    :return: If there exists a five-card straight in cards, return the highest (five) straight cards
+    (sorted desc); else, return None
     """
     cursor = cards[0]
     acc = [cursor]
     for card in cards[1:]:
         if cursor.rank.value - 1 == card.rank.value:
             cursor = card
-            acc.insert(0, card)
+            acc.append(card)
             if len(acc) == 5:
                 return acc
         elif cursor.rank.value == card.rank.value:
@@ -121,7 +126,8 @@ def detect_straight(cards: List[TexasCard]):
 # High Card: (0, [high card, second high card, third high card, etc.])
 # source: https://github.com/RoelandMatthijssens/holdem_calc/blob/master/holdem_calc/holdem_functions.py
 def showdown_decide_smart(hole_cards, community_cards):
-    table_cards = TexasCard.sort_desc(hole_cards + community_cards)  # sorted desc
+    # all seven cards on the table, sorted desc
+    table_cards = TexasCard.sort_desc(hole_cards + community_cards)
     max_suit, max_suit_count = get_max_suit(community_cards)
     # Determine if flush possible
     if max_suit_count >= 3:
@@ -129,35 +135,35 @@ def showdown_decide_smart(hole_cards, community_cards):
             if hole_card.suit == max_suit:
                 max_suit_count += 1
         if max_suit_count >= 5:
-
             # flush is reachable
             # at least five cards are of different ranks, so full house, four of a kind is not possible
 
             # optimal play could be flush / straight / royal flush
-            # >= 5
+            # flush_cards >= 5
             flush_cards = find_suit(table_cards, max_suit)
-            # check straight flush, take desc sorted cards
-            result = detect_straight(TexasCard.sort_desc(flush_cards))
+            # result are five cards sorted desc
+            result = detect_straight(flush_cards)
             if result is not None:
                 # is straight flush
-                if result[0].rank == Rank.Ten:
-                    return RoyalFlush(Hand(*result))
+                if result[-1].rank == Rank.Ten:
+                    return RoyalFlush(result)
                 else:
-                    return StraightFlush(Hand(*result))
+                    return StraightFlush(result)
             else:
-                return Flush(Hand(*(flush_cards[-5:])))
+                return Flush(flush_cards[-5:])
 
     # Remaining: Four of a kind / Full house / Straight / Three of a kind / Two pair / Pair / High card
 
     # Trick: find most frequent rank and second most frequent rank
     rank_distribution = get_rank_distribution(table_cards)
 
-    # The max_rank is the rank with most number of cards on that rank, if # of cards tie, choose the higher rank
-    # use tuple inequality check
-    sec_best_rank, best_rank = sec_best_and_best_rank(rank_distribution)
-
-    def find_rank(rank):
-        return [c for c in table_cards if c.rank == rank]
+    # sort the k, v pair by count(value[0] first, then by the rank(key)
+    # lambda tuple unpacking is removed in python 3
+    rank_distribution_sorted = sorted(rank_distribution.items(),
+                                      key=lambda kv: (kv[1].count, kv[0]))
+    sec_best_rank, best_rank = [v for _, v in rank_distribution_sorted[-2:]]
+    sec_best_rank: BestRankItem
+    best_rank: BestRankItem
 
     def kicker_gen(func):
         # use to get tickers
@@ -167,50 +173,42 @@ def showdown_decide_smart(hole_cards, community_cards):
 
     # check if there is a four of a kind
     if best_rank.count == 4:
-        four_cards = find_rank(best_rank.rank)
+        four_cards = tuple(best_rank.cards)
         kicker = next(kicker_gen(lambda c: c.rank != best_rank.rank))
-        hand_cards = four_cards + [kicker]
-        return FourOfAKind(Hand(*hand_cards))
+        return FourOfAKind(quad=four_cards, kicker=kicker)
     if best_rank.count == 3 and sec_best_rank.count >= 2:
         # could be more than two cards
-        small_end = find_rank(sec_best_rank.rank)[:2]
-        hand_cards = find_rank(best_rank.rank) + small_end
-        assert len(hand_cards) == 5
-        return FullHouse(Hand(*hand_cards))
+        triplet = tuple(best_rank.cards)
+        twins = tuple(sec_best_rank.cards[:2])  # could be more than two
+        return FullHouse(triplet, twins)
 
     # check if it is possible to have a straight
     if len(rank_distribution.keys()) >= 5:
         result = detect_straight(table_cards)
         if result:
-            return Straight(Hand(*result))
+            return Straight(result)
 
     # check if there is a three of a kind
     if best_rank.count == 3:
-        three_cards = find_rank(best_rank.rank)
+        three_cards = tuple(best_rank.cards)
         kg = kicker_gen(lambda c: c.rank != best_rank.rank)
         kickers = [next(kg) for _ in range(2)]
-        hand_cards = three_cards + kickers
-        return ThreeOfAKind(Hand(*hand_cards))
+        return ThreeOfAKind(triplet=three_cards, cards=kickers)
 
     # check if there is two pair / pair
     if best_rank.count == 2:
-        strong_pair = find_rank(best_rank.rank)
+        strong_pair = tuple(best_rank.cards)
         if sec_best_rank.count == 2:
-            weak_pair = find_rank(sec_best_rank.rank)
+            weak_pair = tuple(sec_best_rank.cards)
             kicker = next(kicker_gen(lambda c: c.rank != best_rank.rank and c.rank != sec_best_rank.rank))
-            hand_cards = strong_pair + weak_pair + [kicker]
-            return TwoPair(Hand(*hand_cards))
+            return TwoPair(pair_major=strong_pair, pair_minor=weak_pair, kicker=kicker)
         else:
             kg = kicker_gen(lambda c: c.rank != best_rank.rank)
             kickers = [next(kg) for _ in range(3)]
-            hand_cards = strong_pair + kickers
-            return Pair(Hand(*hand_cards))
+            return Pair(pair=strong_pair, cards=kickers)
 
     # high card
-    return HighCard(Hand(*(table_cards[:5])))
-
-
-TRIAL = 10000
+    return HighCard(cards=table_cards[-5:])
 
 
 def histogram(hole_cards, pool: Iterable[TexasCard], sample=None):
@@ -221,8 +219,8 @@ def histogram(hole_cards, pool: Iterable[TexasCard], sample=None):
     total_trial = len(sample_set)
     if sample:
         total_trial = sample
-        random.shuffle(sample_set)
-        sample_set = sample_set[:sample]
+        idxes = np.random.randint(0, len(sample_set), size=sample)
+        sample_set = [sample_set[i] for i in idxes]
 
     for comm_cards in tqdm(sample_set):
         comm_cards = list(comm_cards)  # tuple -> list
