@@ -1,18 +1,19 @@
 import unittest
-from holdem.card import Card, Suit, Rank
+from holdem.card import TexasCard, Suit, Rank
 from holdem.hand import Hand
 from holdem.showdown import HighCard, TieException, Pair, TwoPair, ThreeOfAKind, Straight, Flush, FullHouse, \
     StraightFlush, RoyalFlush
-from holdem.calculator import showdown_decide, Deck, histogram
+from holdem.calculator import showdown_decide, histogram
+from holdem.deck import Deck
 
 
-class Test(unittest.TestCase):
+class TestBasic(unittest.TestCase):
     # 's2,h12,d7,c14,s10'
-    cards = [Card(Suit.Spade, Rank.Two),
-             Card(Suit.Heart, Rank.Queen),
-             Card(Suit.Diamond, Rank.Seven),
-             Card(Suit.Club, Rank.Ace),
-             Card(Suit.Spade, Rank.Jack)]
+    cards = [TexasCard(Suit.Spade, Rank.Two),
+             TexasCard(Suit.Heart, Rank.Queen),
+             TexasCard(Suit.Diamond, Rank.Seven),
+             TexasCard(Suit.Club, Rank.Ace),
+             TexasCard(Suit.Spade, Rank.Jack)]
 
     hand = Hand(*cards)
     # 顺子牌
@@ -147,13 +148,20 @@ class TestShowndown(unittest.TestCase):
 class TestCalculator(unittest.TestCase):
     deck = Deck()
 
-    def test_poker(self):
+    def test_deck(self):
         all_cards = Deck.gen_poker()
         print(all_cards)
         self.assertTrue(len(all_cards) == 52)
 
+        deck = Deck()
+        hole_card1 = TexasCard.from_str('h7')
+        hole_card2 = TexasCard.from_str('s9')
+        # remove two cards
+        removed = deck.pop(hole_card1, hole_card2)
+        self.assertTrue(len(removed.pool) == 52 - 2)
+
     def test_showdown_decision(self):
-        hole_cards = [Card.from_str('h5'), Card.from_str('h10')]
+        hole_cards = [TexasCard.from_str('h5'), TexasCard.from_str('h10')]
         community_cards = self.deck.random_draw(5)
         print(f'Hole cards: {hole_cards}')
         print(f'Community cards: {community_cards}')
@@ -163,7 +171,8 @@ class TestCalculator(unittest.TestCase):
         print(f'The type is \n {best}')
 
     def test_histogram(self):
-        hole_cards = [Card.from_str('h5'), Card.from_str('h10')]
-        remaining_cards = Deck().pop(*hole_cards).pool
-        result = histogram(hole_cards[0], hole_cards[1], remaining_cards, monte_carlo=True)
-        print(result)
+        hole_cards = [TexasCard.from_str('s14'), TexasCard.from_str('c14')]
+        result = histogram(hole_cards[0], hole_cards[1], Deck().pop(*hole_cards).pool, monte_carlo=True)
+        for k, v in result.items():
+            print(f'{k:<13} : {v:.4f}')
+

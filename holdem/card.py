@@ -41,14 +41,14 @@ class Rank(enum.Enum):
 
     def __repr__(self):
         _special = {
-            1: 'Ace',
+            14: 'Ace',
             11: 'Jack',
             12: 'Queen',
             13: 'King'
         }
         if self.value < 11:
             return self.name
-        return self._special[self.value]
+        return _special[self.value]
 
     @staticmethod
     def is_straight(ranks):
@@ -62,7 +62,12 @@ class Rank(enum.Enum):
         return True
 
 
-class Card:
+class TexasCard:
+    """
+    Special card type for Texas Hold'em, override the greater and equal method as Hold'em only cares about rank, ignores
+    suit.
+    """
+
     def __init__(self, suit: Suit, rank: Rank):
         self.suit = suit
         self.rank = rank
@@ -71,13 +76,20 @@ class Card:
         return self.rank > other.rank
 
     def __eq__(self, other):
-        # Texas holdem rule: The card's numerical rank is of sole importance; suit values are irrelevant
+        # Texas hol;dem rule: The card's numerical rank is of sole importance; suit values are irrelevant
         return self.rank == other.rank
+
+    def identical(self, other):
+        """
+        Since the __eq__ operator is overridden to provide rank-only check, this method does a strict card equality
+        check, i.e. a == b only if a.rank == b.rank and a.suit == b.suit
+        """
+        return self.rank == other.rank and self.suit == other.suit
 
     def __repr__(self):
         return f'<{self.suit.name}|{self.rank.name}>'
 
-    suit_map = {
+    _suit_map = {
         'd': 1,
         'c': 2,
         'h': 3,
@@ -91,4 +103,4 @@ class Card:
         :return:
         """
         suit_str, rank_str = re.match(r'([a-z])(\d+)', card_str).groups()
-        return Card(Suit(cls.suit_map[suit_str]), Rank(int(rank_str)))
+        return TexasCard(Suit(cls._suit_map[suit_str]), Rank(int(rank_str)))

@@ -2,7 +2,7 @@ from collections import OrderedDict
 from functools import cached_property
 from typing import List
 
-from .card import Card
+from .card import TexasCard
 
 
 class Hand:
@@ -10,11 +10,11 @@ class Hand:
     Represent a hand of five cards
     """
 
-    def __init__(self, *cards: Card):
+    def __init__(self, *cards: TexasCard):
         assert len(cards) == 5
 
         # sort by ranks
-        self.cards: List[Card] = sorted(cards)
+        self.cards: List[TexasCard] = sorted(cards)
 
     @cached_property
     def group_by_rank(self):
@@ -43,7 +43,7 @@ class Hand:
         :param hand_str: strings like 'd10,a2,s7,h11,h2',,
         :return: return Hands like [Diamond Jack, Ace Two, Spade Seven, Heart Queen, Heart Two]
         """
-        cards = [Card.from_str(card_str) for card_str in hand_str.split(',')]
+        cards = [TexasCard.from_str(card_str) for card_str in hand_str.split(',')]
         return cls(*cards)
 
     @cached_property

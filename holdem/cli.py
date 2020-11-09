@@ -1,11 +1,12 @@
 import click
 
-from .calculator import Deck, histogram
-from .card import Card
+from .calculator import histogram
+from .deck import Deck
+from .card import TexasCard
 
 
 def card_parser(card_arg):
-    return [Card.from_str(c) for c in card_arg.split(',')]
+    return [TexasCard.from_str(c) for c in card_arg.split(',')]
 
 
 @click.command()

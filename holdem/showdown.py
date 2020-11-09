@@ -217,7 +217,11 @@ class Flush(Showdown):
     def check(hand: Hand):
         # 花色一样, check the suits property
         pivotal = hand.suits[0]
-        return all(suit == pivotal for suit in hand.suits)
+        for suit in hand.suits[1:]:
+            if suit != pivotal:
+                return False
+            pivotal = suit
+        return True
 
 
 class FullHouse(Showdown):
