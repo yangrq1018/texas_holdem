@@ -15,7 +15,7 @@ def card_parser(card_arg):
 def main(hole_cards, monte_carlo):
     # hole_cards = [Card.from_str('h5'), Card.from_str('h10')]
     remaining_cards = Deck().pop(*hole_cards).pool
-    result = histogram(hole_cards[0], hole_cards[1], remaining_cards, monte_carlo=monte_carlo)
+    result = histogram(hole_cards, remaining_cards, monte_carlo=monte_carlo)
     for k, v in result.items():
         print(f'{k:<13} : {v:.4f}')
 

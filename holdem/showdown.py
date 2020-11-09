@@ -3,9 +3,10 @@ Class representing the possible hand values
 """
 import abc
 import enum
+import operator
 from typing import List
 
-from holdem.card import Rank
+from holdem.card import Rank, TexasCard
 from holdem.hand import Hand
 
 
@@ -27,6 +28,21 @@ class Power(enum.Enum):
 
 class TieException(Exception):
     pass
+
+
+def _construct_with_kicker(repeat_rank, cards, repeat_num) -> List[TexasCard]:
+    kickers = []
+    repeat = []
+    for card in TexasCard.sort_desc(cards):
+        if card.rank == repeat_rank:
+            repeat.append(card)
+        else:
+            kickers.append(card)
+            if len(kickers) == 5 - repeat_num:
+                break
+    hand_cards = kickers + repeat
+    assert len(hand_cards) == 5
+    return hand_cards
 
 
 class Showdown(abc.ABC):
@@ -62,6 +78,9 @@ class Showdown(abc.ABC):
         """
         pass
 
+    def __repr__(self):
+        return f'<{self.__class__.__name__}: {self.hand}>'
+
 
 class HighCard(Showdown):
     __power__ = Power.HIGH_CARD
@@ -90,7 +109,7 @@ class Pair(Showdown):
         """
         super().__init__(hand)
         gbr = hand.group_by_rank
-        for rank in reversed(gbr.keys()):
+        for rank in gbr.keys():
             if gbr[rank] == 2:
                 self.pair: Rank = rank
             else:
@@ -126,7 +145,7 @@ class TwoPair(Showdown):
         gbr = hand.group_by_rank
         self.pair1 = None  # low rank
         self.pair2 = None  # high rank
-        for rank in reversed(gbr.keys()):
+        for rank in gbr.keys():
             if gbr[rank] == 2:
                 if self.pair2 is None:
                     self.pair2: Rank = rank
@@ -159,7 +178,7 @@ class ThreeOfAKind(Showdown):
         super().__init__(hand)
         gbr = hand.group_by_rank
 
-        for rank in reversed(gbr.keys()):
+        for rank in gbr.keys():
             if gbr[rank] == 3:
                 self.three = rank
             else:
@@ -264,7 +283,7 @@ class FourOfAKind(Showdown):
         super().__init__(hand)
         gbr = hand.group_by_rank
 
-        for rank in reversed(gbr.keys()):
+        for rank in gbr.keys():
             if gbr[rank] == 4:
                 self.four = rank
             else:

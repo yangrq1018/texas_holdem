@@ -1,8 +1,22 @@
-from collections import OrderedDict
+from collections import OrderedDict, defaultdict
 from functools import cached_property
 from typing import List
 
-from .card import TexasCard
+from .card import TexasCard, Rank
+
+
+def get_rank_distribution(cards: List[TexasCard]):
+    # keys are reversely sorted, only non-zero ranks
+    d = defaultdict(lambda: 0)
+
+    for card in cards:
+        d[card.rank] += 1
+
+    result = OrderedDict()
+    for rank in reversed(list(Rank)):
+        if d[rank] != 0:
+            result[rank] = d[rank]
+    return result
 
 
 class Hand:
@@ -19,23 +33,11 @@ class Hand:
     @cached_property
     def group_by_rank(self):
         """
-        :return: OrderedDict(key, value) pairs where key is rank, value is a tuple of cards in that rank,
+        Only rank with at least one card is returned
+        :return: OrderedDict(key, value) pairs where key is rank, value is the count of cards in that rank, value != 0
         keys are sorted in ascending order
         """
-        d = []
-        group = None
-        for idx, card in enumerate(self.cards):
-            if group is None:
-                group = (card.rank, 1)
-            else:
-                if group[0] == card.rank:
-                    group = (group[0], group[1] + 1)
-                else:
-                    d.append(group)
-                    group = (card.rank, 1)
-            if idx == len(self.cards) - 1:
-                d.append(group)
-        return OrderedDict(d)
+        return get_rank_distribution(self.cards)
 
     @classmethod
     def from_str(cls, hand_str: str):

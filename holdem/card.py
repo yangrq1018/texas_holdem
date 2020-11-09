@@ -1,4 +1,5 @@
 import enum
+import operator
 import re
 
 
@@ -67,6 +68,11 @@ class TexasCard:
     Special card type for Texas Hold'em, override the greater and equal method as Hold'em only cares about rank, ignores
     suit.
     """
+
+    @staticmethod
+    def sort_desc(cards):
+        # sort in reverse order
+        return sorted(cards, key=operator.attrgetter('rank'), reverse=True)
 
     def __init__(self, suit: Suit, rank: Rank):
         self.suit = suit
