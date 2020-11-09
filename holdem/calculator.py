@@ -6,6 +6,7 @@ import time
 from collections import defaultdict, OrderedDict, namedtuple
 from dataclasses import dataclass, field
 from typing import List
+from . import check
 
 import numpy as np
 from tqdm import tqdm
@@ -33,26 +34,6 @@ class BestRankItem:
     cards: List[TexasCard] = field(default_factory=list)
 
 
-# # Brutal force, check every 5-element subset of 2 holes + 5 community cards
-# def showdown_decide_brutal(hole_cards, community_cards: Iterable[TexasCard]):
-#     # five the best hand
-#     hole_card1, hole_card2 = hole_cards
-#     current_best = None
-#     for card_comb in itertools.combinations([hole_card1, hole_card2] + list(community_cards), 5):
-#         # form a hand
-#         hand = Hand(*card_comb)
-#         value = find_best_for_hand(hand)
-#         if current_best is None:
-#             current_best = value
-#         else:
-#             try:
-#                 if value > current_best:
-#                     current_best = value
-#             except TieException:
-#                 pass
-#     return current_best
-#
-
 def get_rank_distribution(cards: Iterable[TexasCard]):
     """
 
@@ -68,7 +49,8 @@ def get_rank_distribution(cards: Iterable[TexasCard]):
     return d
 
 
-# suit with the most number of cards, if
+# suit with the most number of cards
+# ties doesn't matter here, 2==2 ties cannot change anything
 def get_max_suit(community_cards: List[TexasCard]):
     ms = defaultdict(lambda: 0)
     for card in community_cards:
@@ -96,6 +78,7 @@ def detect_straight(cards: List[TexasCard]):
     :return: If there exists a five-card straight in cards, return the highest (five) straight cards
     (sorted desc); else, return None
     """
+    assert is_sorted_cards(cards)
     cursor = cards[0]
     acc = [cursor]
     for card in cards[1:]:
@@ -225,6 +208,29 @@ def histogram(hole_cards, pool: Iterable[TexasCard], sample=None):
     for comm_cards in tqdm(sample_set):
         comm_cards = list(comm_cards)  # tuple -> list
         best = showdown_decide_smart(hole_cards, comm_cards)
+        # brutal search best
+        brutal_best = None
+        for five_card in itertools.combinations(hole_cards + comm_cards, 5):
+            for t in HAND_SEARCH_ORDER:
+                check_t = getattr(check, t.__name__)
+                if check_t.check(check.Hand(*five_card)):
+                    if brutal_best is None:
+                        brutal_best = t
+                    elif brutal_best.__power__ < t.__power__:
+                        brutal_best = t
+        # print(brutal_best.__name__, best.__class__.__name__)
+        assert brutal_best.__name__ == best.__class__.__name__
+
+        # check
+        # if True:
+        #     hand = check.Hand(*best.cards())
+        #     for t in HAND_SEARCH_ORDER:
+        #         if t.__name__ != best.__class__.__name__:
+        #             check_t = getattr(check, t.__name__)
+        #             assert not check_t.check(hand)
+        #         else:
+        #             assert getattr(check, best.__class__.__name__).check(hand)
+        #             break
         results[best.__class__] += 1
 
     od = OrderedDict()

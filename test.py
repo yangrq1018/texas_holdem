@@ -1,7 +1,7 @@
 import unittest
 from holdem.card import TexasCard, Suit, Rank, Cards
 from holdem.showdown import HighCard, TieException, Pair, TwoPair, ThreeOfAKind, Straight, Flush, FullHouse, \
-    StraightFlush, RoyalFlush, FourOfAKind
+    StraightFlush, RoyalFlush, FourOfAKind, is_straight_flush
 from holdem.calculator import histogram, showdown_decide_smart
 from holdem.deck import Deck
 
@@ -33,11 +33,28 @@ class TestCalculator(unittest.TestCase):
 
     def test_histogram(self):
         hole_cards = [TexasCard.from_str('s14'), TexasCard.from_str('c14')]
+        community = Deck().pop(*hole_cards).pop(TexasCard.from_str('d7'), TexasCard.from_str('d8')).pool
 
-        result = histogram(hole_cards,
-                           Deck().pop(*hole_cards).pop(TexasCard.from_str('d7'), TexasCard.from_str('d8')).pool)
+        result = histogram(hole_cards, community
+                           )
+
         for k, v in result.items():
-            print(f'{k:<13} : {v:.4f}')
+            print(f'{k:<13} : {v:.9f}')
+
+
+"""
+Player1 Histogram:
+High Card :  0.0
+Pair :  0.354008400378
+Two Pair :  0.391353404536
+Three of a Kind :  0.122024476962
+Straight :  0.0131553742793
+Flush :  0.0226425915024
+Full House :  0.0875755706931
+Four of a Kind :  0.00912221194367
+Straight Flush :  6.5408946075e-05
+Royal Flush :  5.25607602388e-05
+"""
 
 
 class TestShowdown(unittest.TestCase):
@@ -69,7 +86,17 @@ class TestShowdown(unittest.TestCase):
     @staticmethod
     def showdown(string: str):
         hole_cards, community_cards = TestShowdown.parser(string)
-        return showdown_decide_smart(hole_cards, community_cards)
+        result = showdown_decide_smart(hole_cards, community_cards)
+        cards = result.cards()
+        if not isinstance(result, StraightFlush):
+            try:
+                is_straight_flush(cards)
+            except AssertionError:
+                print('Not straight flush, as expected')
+                pass
+            else:
+                raise ValueError()
+        return result
 
     def test_cases(self):
         print(self.showdown(self.high_card))
