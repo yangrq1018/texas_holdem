@@ -14,12 +14,12 @@ class Deck:
         else:
             self._pool = list(cards)
 
-    def random_draw(self, n):
+    def deal(self, n):
         """
         Draw texas cards from the decker
         """
         idxes = np.random.randint(0, len(self.pool), size=n)
-        return [self.pool[i] for i in idxes]
+        return tuple(self.pool[i] for i in idxes)
 
     @cached_property
     def pool(self):

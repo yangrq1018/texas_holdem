@@ -1,30 +1,14 @@
 import itertools
-# import sys
-import operator
 import time
-# from logbook import Logger, StreamHandler
-from collections import defaultdict, OrderedDict, namedtuple
+from collections import defaultdict, OrderedDict
 from dataclasses import dataclass, field
 from typing import List
-from . import check
 
-import numpy as np
+from paradise.util import Timeit
 from tqdm import tqdm
 
+from .constant import HAND_SEARCH_ORDER
 from .showdown import *
-
-HAND_SEARCH_ORDER = [
-    RoyalFlush,
-    StraightFlush,
-    FourOfAKind,
-    FullHouse,
-    Flush,
-    Straight,
-    ThreeOfAKind,
-    TwoPair,
-    Pair,
-    HighCard
-]
 
 
 @dataclass
@@ -74,66 +58,62 @@ def find_suit(cards: List[TexasCard], flush_suit):
 
 def detect_straight(cards: List[TexasCard]):
     """
+    Beside the normal straight, A2345 is also a straight
     :param cards: assume sorted desc
-    :return: If there exists a five-card straight in cards, return the highest (five) straight cards
+    :return:
+    If there exists a five-card straight in cards,
+    return (five cards), highest card rank as int (1~14)
     (sorted desc); else, return None
     """
-    assert is_sorted_cards(cards)
     cursor = cards[0]
     acc = [cursor]
+    # check if ace in cards
     for card in cards[1:]:
         if cursor.rank.value - 1 == card.rank.value:
             cursor = card
             acc.append(card)
             if len(acc) == 5:
-                return acc
+                return acc, max(acc, key=operator.attrgetter('rank')).rank
         elif cursor.rank.value == card.rank.value:
             pass
         elif cursor.rank.value - 1 > card.rank.value:
             # broken straight
             cursor = card
             acc = [cursor]
+
+    if cursor.rank.value == 2 and len(acc) == 4 and Rank.Ace in [c.rank for c in cards]:
+        # pick that ace card
+        highest_rank = max(acc, key=operator.attrgetter('rank')).rank
+        ace_card = next(c for c in cards if c.rank == Rank.Ace)
+        acc.append(ace_card)
+        return acc, highest_rank
     return None
 
 
-# Return Values:
-# Royal Flush: (9,)
-# Straight Flush: (8, high card)
-# Four of a Kind: (7, quad card, kicker)
-# Full House: (6, trips card, pair card)
-# Flush: (5, [flush high card, flush second high card, ..., flush low card])
-# Straight: (4, high card)
-# Three of a Kind: (3, trips card, (kicker high card, kicker low card))
-# Two Pair: (2, high pair card, low pair card, kicker)
-# Pair: (1, pair card, (kicker high card, kicker med card, kicker low card))
-# High Card: (0, [high card, second high card, third high card, etc.])
 # source: https://github.com/RoelandMatthijssens/holdem_calc/blob/master/holdem_calc/holdem_functions.py
-def showdown_decide_smart(hole_cards, community_cards):
+def decide_showdown(table_cards):
     # all seven cards on the table, sorted desc
-    table_cards = TexasCard.sort_desc(hole_cards + community_cards)
-    max_suit, max_suit_count = get_max_suit(community_cards)
+    table_cards = TexasCard.sort_desc(table_cards)
+    max_suit, max_suit_count = get_max_suit(table_cards)
     # Determine if flush possible
-    if max_suit_count >= 3:
-        for hole_card in hole_cards:
-            if hole_card.suit == max_suit:
-                max_suit_count += 1
-        if max_suit_count >= 5:
-            # flush is reachable
-            # at least five cards are of different ranks, so full house, four of a kind is not possible
+    if max_suit_count >= 5:
+        # flush is reachable
+        # at least five cards are of different ranks, so full house, four of a kind is not possible
 
-            # optimal play could be flush / straight / royal flush
-            # flush_cards >= 5
-            flush_cards = find_suit(table_cards, max_suit)
-            # result are five cards sorted desc
-            result = detect_straight(flush_cards)
-            if result is not None:
-                # is straight flush
-                if result[-1].rank == Rank.Ten:
-                    return RoyalFlush(result)
-                else:
-                    return StraightFlush(result)
+        # optimal play could be flush / straight / royal flush
+        # flush_cards >= 5
+        flush_cards = find_suit(table_cards, max_suit)
+        # result are five cards sorted desc
+        result = detect_straight(flush_cards)
+        if result is not None:
+            cards, max_rank = result
+            # is straight flush
+            if cards[-1].rank == Rank.Ten:
+                return RoyalFlush(cards)
             else:
-                return Flush(flush_cards[-5:])
+                return StraightFlush(cards, max_rank)
+        else:
+            return Flush(flush_cards[-5:])
 
     # Remaining: Four of a kind / Full house / Straight / Three of a kind / Two pair / Pair / High card
 
@@ -169,14 +149,15 @@ def showdown_decide_smart(hole_cards, community_cards):
     if len(rank_distribution.keys()) >= 5:
         result = detect_straight(table_cards)
         if result:
-            return Straight(result)
+            cards, max_rank = result
+            return Straight(cards, max_rank)
 
     # check if there is a three of a kind
     if best_rank.count == 3:
         three_cards = tuple(best_rank.cards)
         kg = kicker_gen(lambda c: c.rank != best_rank.rank)
         kickers = [next(kg) for _ in range(2)]
-        return ThreeOfAKind(triplet=three_cards, cards=kickers)
+        return ThreeOfAKind(triplet=three_cards, kickers=kickers)
 
     # check if there is two pair / pair
     if best_rank.count == 2:
@@ -188,49 +169,22 @@ def showdown_decide_smart(hole_cards, community_cards):
         else:
             kg = kicker_gen(lambda c: c.rank != best_rank.rank)
             kickers = [next(kg) for _ in range(3)]
-            return Pair(pair=strong_pair, cards=kickers)
+            return Pair(pair=strong_pair, kickers=kickers)
 
     # high card
     return HighCard(cards=table_cards[-5:])
 
 
-def histogram(hole_cards, pool: Iterable[TexasCard], sample=None):
+@Timeit(message='Time elapsed')
+def histogram(hole_cards: Tuple[TexasCard, TexasCard], board: Iterable[TexasCard]):
     start = time.time()
     results = defaultdict(lambda: 0)
     # possible to draw five from the pool
-    sample_set = list(itertools.combinations(pool, 5))
-    total_trial = len(sample_set)
-    if sample:
-        total_trial = sample
-        idxes = np.random.randint(0, len(sample_set), size=sample)
-        sample_set = [sample_set[i] for i in idxes]
+    possible_boards = list(itertools.combinations(board, 5))
+    total_trial = len(possible_boards)
 
-    for comm_cards in tqdm(sample_set):
-        comm_cards = list(comm_cards)  # tuple -> list
-        best = showdown_decide_smart(hole_cards, comm_cards)
-        # brutal search best
-        brutal_best = None
-        for five_card in itertools.combinations(hole_cards + comm_cards, 5):
-            for t in HAND_SEARCH_ORDER:
-                check_t = getattr(check, t.__name__)
-                if check_t.check(check.Hand(*five_card)):
-                    if brutal_best is None:
-                        brutal_best = t
-                    elif brutal_best.__power__ < t.__power__:
-                        brutal_best = t
-        # print(brutal_best.__name__, best.__class__.__name__)
-        assert brutal_best.__name__ == best.__class__.__name__
-
-        # check
-        # if True:
-        #     hand = check.Hand(*best.cards())
-        #     for t in HAND_SEARCH_ORDER:
-        #         if t.__name__ != best.__class__.__name__:
-        #             check_t = getattr(check, t.__name__)
-        #             assert not check_t.check(hand)
-        #         else:
-        #             assert getattr(check, best.__class__.__name__).check(hand)
-        #             break
+    for board in tqdm(possible_boards):
+        best = decide_showdown(hole_cards + board)
         results[best.__class__] += 1
 
     od = OrderedDict()

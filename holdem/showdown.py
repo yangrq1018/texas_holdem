@@ -29,35 +29,14 @@ class TieException(Exception):
     pass
 
 
-def is_sorted(l):
-    # desc
-    return all(l[i] >= l[i + 1] for i in range(len(l) - 1))
-
-
-def is_sorted_cards(cards):
-    return is_sorted([c.rank.value for c in cards])
-
-
-def is_straight_flush(cards):
-    ranks = [c.rank.value for c in cards]
-    assert len(ranks) == 5
-    assert max(ranks) - min(ranks) == 4
-    assert len(set(ranks)) == 5
-    assert is_sorted(ranks)
-    suits = [c.suit for c in cards]
-    assert all(s == suits[0] for s in suits)
-    assert not any([cards[i] == cards[i + 1] for i in range(len(cards) - 1)])
-
-
 class Showdown:
     __power__ = None
 
-    def __init__(self, cards: Iterable[TexasCard]):
+    def __init__(self, kickers):
         """
         Signature should be the same as child to allow diamond inheritance
-        :param cards:
         """
-        self.kickers = cards
+        self.kickers = kickers
 
     def __gt__(self, other):
         if self.__power__ != other.__power__:
@@ -79,28 +58,20 @@ class HighCard(Showdown):
     __power__ = Power.HIGH_CARD
 
     def __init__(self, cards):
-        super().__init__(cards=cards)
-
-    def check(self):
-        assert is_sorted_cards(self.kickers)
+        super().__init__(kickers=cards)
 
 
 class Pair(Showdown):
     __power__ = Power.PAIR
 
-    def __init__(self, pair: Tuple[TexasCard, ...], cards: Iterable[TexasCard]):
+    def __init__(self, pair: Tuple[TexasCard, ...], kickers: Iterable[TexasCard]):
         """
 
         :param pair: two cards
         :param cards: sorted desc
         """
-        super().__init__(cards=cards)
+        super().__init__(kickers=kickers)
         self.pair = tuple(pair)
-
-    def check(self):
-        assert self.pair[0].rank == self.pair[1].rank
-        assert len(self.pair) == 2
-        assert is_sorted_cards(self.kickers)
 
     def values(self) -> Tuple[Rank, ...]:
         # priority of the pair cards
@@ -120,16 +91,12 @@ class TwoPair(Showdown):
         :param pair_minor: the minor pair
         :param kicker: a single kicker card
         """
-        super().__init__(cards=[kicker])
+        super().__init__(kickers=[kicker])
         self.pair_major = tuple(pair_major)
         self.pair_minor = tuple(pair_minor)
 
     def values(self) -> Tuple[Rank, ...]:
         return (self.pair_major[0].rank, self.pair_minor[0].rank) + super().values()
-
-    def check(self):
-        assert self.pair_minor[0].rank == self.pair_minor[1].rank
-        assert self.pair_major[0].rank == self.pair_major[1].rank
 
     def cards(self):
         return self.pair_major + self.pair_minor + super().cards()
@@ -138,15 +105,12 @@ class TwoPair(Showdown):
 class ThreeOfAKind(Showdown):
     __power__ = Power.THREE_OF_A_KIND
 
-    def __init__(self, triplet: Tuple[TexasCard, ...], cards):
-        super().__init__(cards=cards)
+    def __init__(self, triplet: Tuple[TexasCard, ...], kickers):
+        super().__init__(kickers=kickers)
         self.triplet = tuple(triplet)
 
     def values(self) -> Tuple[Rank, ...]:
         return (self.triplet[0].rank,) + super().values()
-
-    def check(self):
-        assert self.triplet[0].rank == self.triplet[1].rank == self.triplet[2].rank
 
     def cards(self):
         return self.triplet + super().cards()
@@ -155,17 +119,19 @@ class ThreeOfAKind(Showdown):
 class Straight(Showdown):
     __power__ = Power.STRAIGHT
 
-    def __init__(self, cards):
-        super().__init__(cards=cards)
+    def __init__(self, cards: Iterable[TexasCard], max_rank: Rank):
+        super().__init__(kickers=[])
+        self.max_rank = max_rank
+        self._cards = cards
 
-    def check(self):
-        assert max(self.kickers, key=operator.attrgetter('rank')).rank.value - min(self.kickers,
-                                                                                   key=operator.attrgetter(
-                                                                                       'rank')).rank.value == 4
+    def cards(self):
+        return tuple(self._cards)
 
-        ranks = [k.rank.value for k in self.kickers]
-        assert is_sorted(ranks)
-        assert len(set(ranks)) == 5
+    def values(self) -> Tuple[Rank, ...]:
+        return self.max_rank,
+
+    def __repr__(self):
+        return f'<Straight cards={self.cards()}, max_rank={self.max_rank}>'
 
 
 class Flush(Showdown):
@@ -180,14 +146,14 @@ class FullHouse(Showdown):
 
     def __init__(self, triplet: Tuple[TexasCard, ...], twins: [TexasCard, TexasCard, TexasCard]):
         # no kickers
-        super().__init__(cards=[])
+        super().__init__(kickers=[])
         self.triplet = tuple(triplet)
         self.twins = tuple(twins)
         assert len(self.triplet) == 3
         assert len(self.twins) == 2
 
     def values(self) -> Tuple[Rank, ...]:
-        return (self.triplet[0].rank, self.twins[0].rank) + super().values()
+        return self.triplet[0].rank, self.twins[0].rank
 
     def cards(self):
         return self.triplet + self.twins
@@ -197,7 +163,7 @@ class FourOfAKind(Showdown):
     __power__ = Power.FOUR_OF_A_KIND
 
     def __init__(self, quad: Tuple[TexasCard, ...], kicker: TexasCard):
-        super().__init__(cards=[kicker])
+        super().__init__(kickers=[kicker])
         self.quad = tuple(quad)
 
     def values(self) -> Tuple[Rank, ...]:
@@ -207,12 +173,12 @@ class FourOfAKind(Showdown):
         return self.quad + super().cards()
 
 
-class StraightFlush(Flush, Straight):
+class StraightFlush(Straight):
     __power__ = Power.STRAIGHT_FLUSH
-
-    def check(self):
-        is_straight_flush(list(self.kickers))
 
 
 class RoyalFlush(StraightFlush):
     __power__ = Power.ROYAL_FLUSH
+
+    def __init__(self, cards):
+        super().__init__(cards=cards, max_rank=Rank.Ace)

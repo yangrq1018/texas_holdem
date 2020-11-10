@@ -1,7 +1,6 @@
 import enum
 import operator
 import re
-from typing import List
 
 
 class Suit(enum.Enum):
@@ -21,6 +20,15 @@ class Suit(enum.Enum):
             if suit != first:
                 return False
         return True
+
+    def __repr__(self):
+        m = {
+            1: 'd',
+            2: 'c',
+            3: 'h',
+            4: 's'
+        }
+        return m[self.value]
 
 
 class Rank(enum.Enum):
@@ -42,15 +50,14 @@ class Rank(enum.Enum):
         return self.value > other.value
 
     def __repr__(self):
-        _special = {
-            14: 'Ace',
-            11: 'Jack',
-            12: 'Queen',
-            13: 'King'
+        m = {
+            10: 'T',
+            11: 'J',
+            12: 'Q',
+            13: 'K',
+            14: 'A'
         }
-        if self.value < 11:
-            return self.name
-        return _special[self.value]
+        return m[self.value] if self.value in m else str(self.value)
 
     @staticmethod
     def is_straight(ranks):
@@ -83,15 +90,25 @@ class TexasCard:
         # Texas hol;dem rule: The card's numerical rank is of sole importance; suit values are irrelevant
         return self.rank == other.rank and self.suit == other.suit
 
-    def __repr__(self):
-        return f'<{self.suit.name}|{self.rank.name}>'
+    def __str__(self):
+        return self.__repr__()
 
-    _suit_map = {
-        'd': 1,
-        'c': 2,
-        'h': 3,
-        's': 4
-    }
+    def to_eval7_str(self):
+        return repr(self.rank) + repr(self.suit)
+
+    def __hash__(self):
+        _key = self.suit, self.rank
+        return hash(_key)
+
+    def __repr__(self):
+        _special = {
+            Rank.Ten: 'T',
+            Rank.Ace: 'A',
+            Rank.Jack: 'J',
+            Rank.Queen: 'Q',
+            Rank.King: 'K'
+        }
+        return f'<card {repr(self.rank) + repr(self.suit)}>'
 
     @classmethod
     def from_str(cls, card_str: str):
@@ -99,18 +116,29 @@ class TexasCard:
         :param card_str: strings like 'a10'
         :return:
         """
-        suit_str, rank_str = re.match(r'([a-z])(\d+)', card_str).groups()
-        return TexasCard(Suit(cls._suit_map[suit_str]), Rank(int(rank_str)))
+        rank, suit_str = re.match(r'([AJQKT]|\d)([dchs])', card_str).groups()
+        if rank == 'A':
+            rank = 14
+        elif rank == 'K':
+            rank = 13
+        elif rank == 'Q':
+            rank = 12
+        elif rank == 'J':
+            rank = 11
+        elif rank == 'T':
+            rank = 10
+        else:
+            rank = int(rank)
 
+        if suit_str == 'd':
+            suit = Suit.Diamond
+        elif suit_str == 'c':
+            suit = Suit.Club
+        elif suit_str == 'h':
+            suit = Suit.Heart
+        elif suit_str == 's':
+            suit = Suit.Spade
+        else:
+            raise ValueError(suit_str)
 
-class Cards:
-    @staticmethod
-    def from_str(string, delim=',') -> List[TexasCard]:
-        """
-
-        :param delim:
-        :param string: h2 h4 h5 h6 78, could be unsorted
-        :return: a list of cards, sorted descending
-        """
-        return sorted([TexasCard.from_str(card_s) for card_s in string.split(delim)], key=operator.attrgetter('rank'),
-                      reverse=True)
+        return TexasCard(suit, Rank(rank))

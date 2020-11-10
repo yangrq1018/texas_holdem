@@ -1,114 +1,66 @@
 import unittest
-from holdem.card import TexasCard, Suit, Rank, Cards
-from holdem.showdown import HighCard, TieException, Pair, TwoPair, ThreeOfAKind, Straight, Flush, FullHouse, \
-    StraightFlush, RoyalFlush, FourOfAKind, is_straight_flush
-from holdem.calculator import histogram, showdown_decide_smart
+
+from holdem.detect import histogram, decide_showdown
+from holdem.card import TexasCard
 from holdem.deck import Deck
+from holdem.showdown import HighCard, Pair, TwoPair, ThreeOfAKind, Straight, Flush, FullHouse, \
+    StraightFlush, RoyalFlush, FourOfAKind
+from holdem.eval7_api import histogram as eval7_histogram, decide_showdown as eval7_decide_showdown
 
 
-class TestCalculator(unittest.TestCase):
-    deck = Deck()
+class TestInfra(unittest.TestCase):
+    def test_card(self):
+        print([TexasCard.from_str(s) for s in ('As', '2c', '3d', '5s', '4c')])
 
     def test_deck(self):
         all_cards = Deck.gen_poker()
-        print(all_cards)
+        # print(all_cards)
         self.assertTrue(len(all_cards) == 52)
 
         deck = Deck()
-        hole_card1 = TexasCard.from_str('h7')
-        hole_card2 = TexasCard.from_str('s9')
+        hole_card1 = TexasCard.from_str('7h')
+        hole_card2 = TexasCard.from_str('9s')
         # remove two cards
         removed = deck.pop(hole_card1, hole_card2)
         self.assertTrue(len(removed.pool) == 52 - 2)
+        print(deck.deal(5))
 
     def test_showdown_decision(self):
-        hole_cards = [TexasCard.from_str('h5'), TexasCard.from_str('h10')]
-        community_cards = self.deck.random_draw(5)
+        hole_cards = (TexasCard.from_str('5h'), TexasCard.from_str('Th'))
+        community_cards = Deck().pop(*hole_cards).deal(5)
         print(f'Hole cards: {hole_cards}')
         print(f'Community cards: {community_cards}')
-        best = showdown_decide_smart(hole_cards, community_cards)
+        best = decide_showdown(hole_cards + community_cards)
         print('Best play -->')
-        print(f'5 card picked: {best}')
+        print(f'5 card picked: {best.cards()}')
         print(f'The type is \n {best}')
-
-    def test_histogram(self):
-        hole_cards = [TexasCard.from_str('s14'), TexasCard.from_str('c14')]
-        community = Deck().pop(*hole_cards).pop(TexasCard.from_str('d7'), TexasCard.from_str('d8')).pool
-
-        result = histogram(hole_cards, community
-                           )
-
-        for k, v in result.items():
-            print(f'{k:<13} : {v:.9f}')
-
-
-"""
-Player1 Histogram:
-High Card :  0.0
-Pair :  0.354008400378
-Two Pair :  0.391353404536
-Three of a Kind :  0.122024476962
-Straight :  0.0131553742793
-Flush :  0.0226425915024
-Full House :  0.0875755706931
-Four of a Kind :  0.00912221194367
-Straight Flush :  6.5408946075e-05
-Royal Flush :  5.25607602388e-05
-"""
 
 
 class TestShowdown(unittest.TestCase):
-    high_card = "h4 d8, c7 d10 s2 c3 c11"
-    pair = "h4 d8, c7 d10 s10 c3 c11"
-    two_pair = "h4 d7, c7 d10 s10 c11 c11"
-    three_kind = "h4 d7, c10 d10 s10 c3 c11"
-    straight = "h4 d3, c5 d6 s7 c3 c11"
-    flush = "h4 h3, c5 h6 h7 h3 c11"
-    full_house = "h8 d8, c8 d10 s2 c2 c11"
-    four_kind = "h8 d8, c8 d8 s2 c2 c11"
-    straight_flush = "h4 h3, h5 h6 h7 h8 c11"
-    royal_flush = "h13 h14, c5 s6 h12 h11 h10"
-
-    # Royal Flush: (9,)
-    # Straight Flush: (8, high card)
-    # Four of a Kind: (7, quad card, kicker)
-    # Full House: (6, trips card, pair card)
-    @staticmethod
-    def parser(string: str):
-        """
-        'h4 d8, c4 d4 s8 c8 c9 -> (hole1, hole2) and (five community cards)
-        """
-        hs, cs = [s.strip() for s in string.split(',')]
-        hole_cards = [TexasCard.from_str(s.strip()) for s in hs.split(' ')]
-        community_cards = [TexasCard.from_str(s.strip()) for s in cs.split(' ')]
-        return hole_cards, community_cards
+    high_card = "4h 8d 7c Td 2s 3c Jc"
+    pair = "4h 8d 7c Td Ts 3c Jc"
+    two_pair = "4h 7d 7c Td Ts Jc Jc"
+    three_kind = "4h 7d Tc Td Ts 3c Jc"
+    straight = "4h 3d 5c 6d 7s 3c Jc"
+    flush = "4h 3h 5c 6h 7h 3h Jc"
+    full_house = "8h 8d 8c Td 2s 2c Jc"
+    four_kind = "8h 8d 8c 8d 2s 2c Jc"
+    straight_flush = "4h 3h 5h 6h 7h 8h Jc"
+    royal_flush = "Kh Ah 5c 6s Qh Jh Th"
 
     @staticmethod
     def showdown(string: str):
-        hole_cards, community_cards = TestShowdown.parser(string)
-        result = showdown_decide_smart(hole_cards, community_cards)
-        cards = result.cards()
-        if not isinstance(result, StraightFlush):
-            try:
-                is_straight_flush(cards)
-            except AssertionError:
-                print('Not straight flush, as expected')
-                pass
-            else:
-                raise ValueError()
+        cards = [TexasCard.from_str(s) for s in string.split(' ')]
+        hole_cards = tuple(cards[:2])
+        community_cards = tuple(cards[2:])
+        result = decide_showdown(hole_cards + community_cards)
         return result
 
-    def test_cases(self):
-        print(self.showdown(self.high_card))
-        print(self.showdown(self.pair))
-        print(self.showdown(self.two_pair))
-        print(self.showdown(self.three_kind))
-        print(self.showdown(self.straight))
-        print(self.showdown(self.flush))
-        print(self.showdown(self.full_house))
-        print(self.showdown(self.four_kind))
-        print(self.showdown(self.straight_flush))
-        print(self.showdown(self.royal_flush))
+    def test_straight_detection(self):
+        straight = "4h 3d 5c 6d 7s 3c Jc"
+        min_straight = "Ah 3d 2c 4d 5s 3c Jc"
+        self.assertIsInstance(self.showdown(straight), Straight)
+        self.assertIsInstance(self.showdown(min_straight), Straight)
 
     def test_case_eq(self):
         self.assertIsInstance(self.showdown(self.high_card), HighCard)
@@ -121,3 +73,52 @@ class TestShowdown(unittest.TestCase):
         self.assertIsInstance(self.showdown(self.four_kind), FourOfAKind)
         self.assertIsInstance(self.showdown(self.straight_flush), StraightFlush)
         self.assertIsInstance(self.showdown(self.royal_flush), RoyalFlush)
+
+    def test_histogram(self):
+        hole_cards_p1 = (TexasCard.from_str('As'), TexasCard.from_str('Ac'))
+        hole_cards_p2 = (TexasCard.from_str('7c'), TexasCard.from_str('8d'))
+        board = Deck().pop(*hole_cards_p1, *hole_cards_p2).pool
+        result = histogram(hole_cards_p1, board)
+        for k, v in result.items():
+            print(f'{k:<13} : {v:.9f}')
+
+
+class TestPyEval7(unittest.TestCase):
+    high_card = "4h 8d 7c Td 2s 3c Jc"
+    pair = "4h 8d 7c Td Ts 3c Jc"
+    two_pair = "4h 7d 7c Td Ts Jc Jd"
+    three_kind = "4h 7d Tc Td Ts 3c Jc"
+    straight = "4h 3d 5c 6d 7s 3c Jc"
+    flush = "4h 3h 5c 6h 7h 3d Jh"
+    full_house = "8h 8d 8c Td 2s 2c Jc"
+    four_kind = "8h 8d 8s 8c 2s 2c Jc"
+    straight_flush = "4h 3h 5h 6h 7h 8h Jc"
+    royal_flush = "Kh Ah 5c 6s Qh Jh Th"
+
+    @staticmethod
+    def showdown(string: str):
+        cards = [TexasCard.from_str(s) for s in string.split(' ')]
+        hole_cards = tuple(cards[:2])
+        community_cards = tuple(cards[2:])
+        result = eval7_decide_showdown(hole_cards + community_cards)
+        return result
+
+    def test_case_eq(self):
+        self.assertEqual(self.showdown(self.high_card), HighCard)
+        self.assertEqual(self.showdown(self.pair), Pair)
+        self.assertEqual(self.showdown(self.two_pair), TwoPair, self.showdown(self.two_pair))
+        self.assertEqual(self.showdown(self.three_kind), ThreeOfAKind)
+        self.assertEqual(self.showdown(self.straight), Straight)
+        self.assertEqual(self.showdown(self.flush), Flush)
+        self.assertEqual(self.showdown(self.full_house), FullHouse)
+        self.assertEqual(self.showdown(self.four_kind), FourOfAKind)
+        self.assertEqual(self.showdown(self.straight_flush), StraightFlush)
+        self.assertEqual(self.showdown(self.royal_flush), RoyalFlush)
+
+    def test_eval7_histogram(self):
+        hole_cards_p1 = (TexasCard.from_str('As'), TexasCard.from_str('Ac'))
+        hole_cards_p2 = (TexasCard.from_str('7c'), TexasCard.from_str('8d'))
+        board = Deck().pop(*hole_cards_p1, *hole_cards_p2).pool
+        result = eval7_histogram(hole_cards_p1, board)
+        for k, v in result.items():
+            print(f'{k:<13} : {v:.9f}')
