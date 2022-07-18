@@ -3,9 +3,11 @@
 Before you start, it is recommended to create a clean new Conda environment
 
 ```
-conda create --name "texas_holdem"
+conda create --name "texas_holdem" python==3.10
 conda activate texas_holdem
 ```
+
+> 如果`conda activate`没有效果(如`pip`并非指向新创建的虚拟环境)，可以尝试`conda init`重置shell环境。
 
 Install the necessary dependencies
 

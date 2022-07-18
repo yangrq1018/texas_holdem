@@ -176,7 +176,7 @@ def decide_showdown(table_cards):
 
 
 @Timeit(message='Time elapsed')
-def histogram(hole_cards: List[TexasCard, TexasCard], board: Iterable[TexasCard], progress=False):
+def histogram(hole_cards: Tuple[TexasCard, TexasCard], board: Iterable[TexasCard], progress=False):
     start = time.time()
     results = defaultdict(lambda: 0)
     # possible to draw five from the pool
@@ -185,7 +185,7 @@ def histogram(hole_cards: List[TexasCard, TexasCard], board: Iterable[TexasCard]
 
     for board in tqdm(possible_boards) if progress else possible_boards:
         # board is tuple here
-        best = decide_showdown(hole_cards + list(board))
+        best = decide_showdown(list(hole_cards) + list(board))
         results[best.__class__] += 1
 
     od = OrderedDict()
