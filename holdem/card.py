@@ -76,7 +76,6 @@ class TexasCard:
     Special card type for Texas Hold'em, override the greater and equal method as Hold'em only cares about rank, ignores
     suit.
     """
-
     @staticmethod
     def sort_desc(cards):
         # sort in reverse order
@@ -101,44 +100,47 @@ class TexasCard:
         return hash(_key)
 
     def __repr__(self):
-        _special = {
-            Rank.Ten: 'T',
-            Rank.Ace: 'A',
-            Rank.Jack: 'J',
-            Rank.Queen: 'Q',
-            Rank.King: 'K'
-        }
         return f'<card {repr(self.rank) + repr(self.suit)}>'
 
     @classmethod
     def from_str(cls, card_str: str):
         """
-        :param card_str: strings like 'a10'
+        :param card_str: strings like 'As' (Spade Ace), '2c' (Club 2)
         :return:
-        """
-        rank, suit_str = re.match(r'([AJQKT]|\d)([dchs])', card_str).groups()
-        if rank == 'A':
-            rank = 14
-        elif rank == 'K':
-            rank = 13
-        elif rank == 'Q':
-            rank = 12
-        elif rank == 'J':
-            rank = 11
-        elif rank == 'T':
-            rank = 10
-        else:
-            rank = int(rank)
 
-        if suit_str == 'd':
+        Note: card 10 is denoted as T, for single-letter rank consistency.
+        """
+        match = re.match(r'([AJQKTajqkt]|\d)([dchsDCHS])', card_str)
+        if match is None:
+            raise ValueError(f"Cannot parse card string: {card_str}")
+        rank, suit_str = match.groups()
+
+        match rank.upper():
+            case 'A':
+                rank = 14
+            case 'K':
+                rank = 13
+            case 'Q':
+                rank = 12
+            case  'J':
+                rank = 11
+            case 'T':
+                rank = 10
+            case _:
+                try:
+                    rank = int(rank)
+                except ValueError as err:
+                    raise ValueError(f"Illegal number rank: {err}")
+                
+        if suit_str.lower() == 'd':
             suit = Suit.Diamond
-        elif suit_str == 'c':
+        elif suit_str.lower() == 'c':
             suit = Suit.Club
-        elif suit_str == 'h':
+        elif suit_str.lower() == 'h':
             suit = Suit.Heart
-        elif suit_str == 's':
+        elif suit_str.lower() == 's':
             suit = Suit.Spade
         else:
-            raise ValueError(suit_str)
+            raise ValueError(f"Illege suit: {suit_str}")
 
         return TexasCard(suit, Rank(rank))

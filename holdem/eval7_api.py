@@ -1,16 +1,18 @@
 import itertools
-from collections import defaultdict
-from typing import List, Iterable, Tuple
-from collections import OrderedDict
+from collections import OrderedDict, defaultdict
+from typing import Iterable, List, Tuple
+
 import eval7
-from paradise.util import Timeit
 from tqdm import tqdm
 
-from .constant import HAND_SEARCH_ORDER
-from .showdown import HighCard, Pair, ThreeOfAKind, Straight, Flush, FullHouse, FourOfAKind, StraightFlush, TwoPair, \
-    RoyalFlush
 from holdem.card import TexasCard
+
 from . import detect
+from .constant import HAND_SEARCH_ORDER
+from .showdown import (Flush, FourOfAKind, FullHouse, HighCard, Pair,
+                       RoyalFlush, Straight, StraightFlush, ThreeOfAKind,
+                       TwoPair)
+from .util import Timeit
 
 STR_MAP = {
     "High Card": HighCard,

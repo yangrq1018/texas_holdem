@@ -4,11 +4,11 @@ from collections import defaultdict, OrderedDict
 from dataclasses import dataclass, field
 from typing import List
 
-from paradise.util import Timeit
 from tqdm import tqdm
 
 from .constant import HAND_SEARCH_ORDER
 from .showdown import *
+from .util import Timeit
 
 
 @dataclass
@@ -176,15 +176,16 @@ def decide_showdown(table_cards):
 
 
 @Timeit(message='Time elapsed')
-def histogram(hole_cards: Tuple[TexasCard, TexasCard], board: Iterable[TexasCard]):
+def histogram(hole_cards: List[TexasCard, TexasCard], board: Iterable[TexasCard], progress=False):
     start = time.time()
     results = defaultdict(lambda: 0)
     # possible to draw five from the pool
     possible_boards = list(itertools.combinations(board, 5))
     total_trial = len(possible_boards)
 
-    for board in tqdm(possible_boards):
-        best = decide_showdown(hole_cards + board)
+    for board in tqdm(possible_boards) if progress else possible_boards:
+        # board is tuple here
+        best = decide_showdown(hole_cards + list(board))
         results[best.__class__] += 1
 
     od = OrderedDict()
